@@ -15,14 +15,16 @@ pub(crate) struct StreamController {
     state: StreamState,
     finishing_after_drain: bool,
     header_emitted: bool,
+    continuation_indent: usize,
 }
 
 impl StreamController {
-    pub(crate) fn new(width: Option<usize>) -> Self {
+    pub(crate) fn new(width: Option<usize>, continuation_indent: usize) -> Self {
         Self {
             state: StreamState::new(width),
             finishing_after_drain: false,
             header_emitted: false,
+            continuation_indent,
         }
     }
 
@@ -99,11 +101,16 @@ impl StreamController {
         if lines.is_empty() {
             return None;
         }
-        Some(Box::new(history_cell::AgentMessageCell::new(lines, {
+        let is_first_line = {
             let header_emitted = self.header_emitted;
             self.header_emitted = true;
             !header_emitted
-        })))
+        };
+        Some(Box::new(history_cell::AgentMessageCell::new_with_indent(
+            lines,
+            is_first_line,
+            self.continuation_indent,
+        )))
     }
 }
 
@@ -248,7 +255,7 @@ mod tests {
 
     #[tokio::test]
     async fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
-        let mut ctrl = StreamController::new(None);
+        let mut ctrl = StreamController::new(None, 2);
         let mut lines = Vec::new();
 
         // Exact deltas from the session log (section: Loose vs. tight list items)

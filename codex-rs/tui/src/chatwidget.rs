@@ -2686,7 +2686,10 @@ impl ChatWidget {
                 self.needs_final_message_separator = false;
             }
             self.stream_controller = Some(StreamController::new(
-                self.last_rendered_width.get().map(|w| w.saturating_sub(2)),
+                self.last_rendered_width
+                    .get()
+                    .map(|w| w.saturating_sub(self.config.tui_continuation_indent)),
+                self.config.tui_continuation_indent,
             ));
         }
         if let Some(controller) = self.stream_controller.as_mut()
@@ -5006,7 +5009,11 @@ impl ChatWidget {
                     // Show explanation when there are no structured findings.
                     let mut rendered: Vec<ratatui::text::Line<'static>> = vec!["".into()];
                     append_markdown(&explanation, None, &mut rendered);
-                    let body_cell = AgentMessageCell::new(rendered, false);
+                    let body_cell = AgentMessageCell::new_with_indent(
+                        rendered,
+                        false,
+                        self.config.tui_continuation_indent,
+                    );
                     self.app_event_tx
                         .send(AppEvent::InsertHistoryCell(Box::new(body_cell)));
                 }
