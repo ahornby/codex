@@ -456,28 +456,40 @@ impl HistoryCell for ReasoningSummaryCell {
 pub(crate) struct AgentMessageCell {
     lines: Vec<Line<'static>>,
     is_first_line: bool,
+    continuation_indent: usize,
 }
 
 impl AgentMessageCell {
+    #[cfg(test)]
     pub(crate) fn new(lines: Vec<Line<'static>>, is_first_line: bool) -> Self {
+        Self::new_with_indent(lines, is_first_line, 2)
+    }
+
+    pub(crate) fn new_with_indent(
+        lines: Vec<Line<'static>>,
+        is_first_line: bool,
+        continuation_indent: usize,
+    ) -> Self {
         Self {
             lines,
             is_first_line,
+            continuation_indent,
         }
     }
 }
 
 impl HistoryCell for AgentMessageCell {
     fn display_lines(&self, width: u16) -> Vec<Line<'static>> {
+        let continuation_indent = " ".repeat(self.continuation_indent);
         adaptive_wrap_lines(
             &self.lines,
             RtOptions::new(width as usize)
                 .initial_indent(if self.is_first_line {
                     "• ".dim().into()
                 } else {
-                    "  ".into()
+                    continuation_indent.clone().into()
                 })
-                .subsequent_indent("  ".into()),
+                .subsequent_indent(continuation_indent.into()),
         )
     }
 
@@ -3571,6 +3583,19 @@ mod tests {
         let cell = AgentMessageCell::new(vec![Line::default()], /*is_first_line*/ false);
         assert_eq!(cell.transcript_lines(/*width*/ 80), vec![Line::from("  ")]);
         assert_eq!(cell.desired_transcript_height(/*width*/ 80), 1);
+    }
+
+    #[test]
+    fn agent_message_cell_custom_indent_is_applied() {
+        let cell = AgentMessageCell::new_with_indent(
+            vec![Line::from("line one"), Line::from("line two")],
+            false,
+            0,
+        );
+        assert_eq!(
+            render_lines(&cell.display_lines(80)),
+            vec!["line one".to_string(), "line two".to_string()]
+        );
     }
 
     #[test]

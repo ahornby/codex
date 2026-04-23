@@ -2173,6 +2173,13 @@
           "description": "Enable animations (welcome screen, shimmer effects, spinners). Defaults to `true`.",
           "type": "boolean"
         },
+        "continuation_indent": {
+          "default": 2,
+          "description": "Number of spaces to indent assistant transcript continuation lines in the TUI. Defaults to `2`.",
+          "format": "uint",
+          "minimum": 0.0,
+          "type": "integer"
+        },
         "model_availability_nux": {
           "allOf": [
             {

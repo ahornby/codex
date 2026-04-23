@@ -549,6 +549,11 @@ pub struct Tui {
     #[serde(default = "default_true")]
     pub show_tooltips: bool,
 
+    /// Number of spaces to indent assistant transcript continuation lines in the TUI.
+    /// Defaults to `2`.
+    #[serde(default = "default_tui_continuation_indent")]
+    pub continuation_indent: usize,
+
     /// Controls whether the TUI uses the terminal's alternate screen buffer.
     ///
     /// - `auto` (default): Disable alternate screen in Zellij, enable elsewhere.
@@ -584,6 +589,10 @@ pub struct Tui {
     /// Startup tooltip availability NUX state persisted by the TUI.
     #[serde(default)]
     pub model_availability_nux: ModelAvailabilityNuxConfig,
+}
+
+const fn default_tui_continuation_indent() -> usize {
+    2
 }
 
 const fn default_true() -> bool {

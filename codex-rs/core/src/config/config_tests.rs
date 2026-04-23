@@ -511,6 +511,7 @@ fn config_toml_deserializes_model_availability_nux() {
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             show_tooltips: true,
+            continuation_indent: 2,
             alternate_screen: AltScreenMode::default(),
             status_line: None,
             terminal_title: None,
@@ -1423,6 +1424,7 @@ fn tui_config_missing_notifications_field_defaults_to_enabled() {
             notification_settings: TuiNotificationSettings::default(),
             animations: true,
             show_tooltips: true,
+            continuation_indent: 2,
             alternate_screen: AltScreenMode::Auto,
             status_line: None,
             terminal_title: None,
@@ -5274,6 +5276,7 @@ async fn test_precedence_fixture_with_o3_profile() -> std::io::Result<()> {
             tui_status_line: None,
             tui_terminal_title: None,
             tui_theme: None,
+            tui_continuation_indent: 2,
             otel: OtelConfig::default(),
         },
         o3_profile_config
@@ -5470,6 +5473,7 @@ async fn test_precedence_fixture_with_gpt3_profile() -> std::io::Result<()> {
         tui_status_line: None,
         tui_terminal_title: None,
         tui_theme: None,
+        tui_continuation_indent: 2,
         otel: OtelConfig::default(),
     };
 
@@ -5620,6 +5624,7 @@ async fn test_precedence_fixture_with_zdr_profile() -> std::io::Result<()> {
         tui_status_line: None,
         tui_terminal_title: None,
         tui_theme: None,
+        tui_continuation_indent: 2,
         otel: OtelConfig::default(),
     };
 
@@ -5755,6 +5760,7 @@ async fn test_precedence_fixture_with_gpt5_profile() -> std::io::Result<()> {
         tui_status_line: None,
         tui_terminal_title: None,
         tui_theme: None,
+        tui_continuation_indent: 2,
         otel: OtelConfig::default(),
     };
 
@@ -7465,11 +7471,17 @@ speaker = "Desk Speakers"
 struct TuiTomlTest {
     #[serde(default, flatten)]
     notifications: TuiNotificationSettings,
+    #[serde(default = "default_tui_test_continuation_indent")]
+    continuation_indent: usize,
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
 struct RootTomlTest {
     tui: TuiTomlTest,
+}
+
+const fn default_tui_test_continuation_indent() -> usize {
+    2
 }
 
 #[test]
@@ -7550,4 +7562,47 @@ fn test_tui_notification_condition_rejects_unknown_value() {
             && err.contains("always"),
         "unexpected error: {err}"
     );
+}
+
+#[test]
+fn test_tui_continuation_indent() {
+    let toml = r#"
+            [tui]
+            continuation_indent = 0
+        "#;
+    let parsed: RootTomlTest =
+        toml::from_str(toml).expect("deserialize tui.continuation_indent = 0");
+    assert_eq!(parsed.tui.continuation_indent, 0);
+}
+
+#[test]
+fn test_tui_continuation_indent_defaults_to_two() {
+    let toml = r#"
+            [tui]
+            notifications = true
+        "#;
+    let parsed: RootTomlTest =
+        toml::from_str(toml).expect("deserialize tui config with default indent");
+    assert_eq!(parsed.tui.continuation_indent, 2);
+}
+
+#[test]
+fn test_tui_continuation_indent_loads_into_effective_config() -> std::io::Result<()> {
+    let cfg: ConfigToml = toml::from_str(
+        r#"
+[tui]
+continuation_indent = 5
+"#,
+    )
+    .expect("TOML deserialization should succeed");
+
+    let codex_home = TempDir::new()?;
+    let config = Config::load_from_base_config_with_overrides(
+        cfg,
+        ConfigOverrides::default(),
+        codex_home.path().to_path_buf(),
+    )?;
+
+    assert_eq!(config.tui_continuation_indent, 5);
+    Ok(())
 }

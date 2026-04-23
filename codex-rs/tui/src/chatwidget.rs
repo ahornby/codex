@@ -4704,7 +4704,10 @@ impl ChatWidget {
                 self.needs_final_message_separator = false;
             }
             self.stream_controller = Some(StreamController::new(
-                self.last_rendered_width.get().map(|w| w.saturating_sub(2)),
+                self.last_rendered_width
+                    .get()
+                    .map(|w| w.saturating_sub(self.config.tui_continuation_indent)),
+                self.config.tui_continuation_indent,
                 &self.config.cwd,
             ));
         }
