@@ -580,6 +580,12 @@ impl App {
                             approvals_reviewer
                                 .unwrap_or(self.chat_widget.config_ref().approvals_reviewer),
                             sandbox_policy.clone(),
+                            Some(
+                                self.chat_widget
+                                    .config_ref()
+                                    .permissions
+                                    .permission_profile(),
+                            ),
                             model.to_string(),
                             effort,
                             *summary,
