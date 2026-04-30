@@ -89,7 +89,8 @@ commands that would enter the bubblewrap path.
   TCP->UDS->TCP routing bridge so tool traffic reaches only configured proxy
   endpoints.
 - In managed proxy mode, after the bridge is live, seccomp blocks new
-  AF_UNIX/socketpair creation for the user command.
+  AF_UNIX socket creation for the user command. AF_UNIX socketpairs remain
+  available for local runtime IPC such as signal handling.
 - When bubblewrap is active, it mounts a fresh `/proc` via `--proc /proc` by default, but
   you can skip this in restrictive container environments with `--no-proc`.
 

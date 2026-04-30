@@ -310,3 +310,95 @@ async fn managed_proxy_mode_denies_af_unix_creation_for_user_command() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[tokio::test]
+async fn managed_proxy_mode_allows_af_unix_socketpair_for_user_command() {
+    if let Some(skip_reason) = managed_proxy_skip_reason().await {
+        eprintln!("skipping managed proxy test: {skip_reason}");
+        return;
+    }
+
+    let python_available = Command::new("bash")
+        .arg("-c")
+        .arg("command -v python3 >/dev/null")
+        .status()
+        .await
+        .expect("python3 probe should execute")
+        .success();
+    if !python_available {
+        eprintln!("skipping managed proxy AF_UNIX socketpair test: python3 is unavailable");
+        return;
+    }
+
+    let mut env = create_env_from_core_vars();
+    strip_proxy_env(&mut env);
+    env.insert("HTTP_PROXY".to_string(), "http://127.0.0.1:9".to_string());
+
+    let output = run_linux_sandbox_direct(
+        &[
+            "python3",
+            "-c",
+            "import socket\nleft,right = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)\nleft.close()\nright.close()\n",
+        ],
+        &PermissionProfile::Disabled,
+        /*allow_network_for_proxy*/ true,
+        env,
+        NETWORK_TIMEOUT_MS,
+    )
+    .await;
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "expected AF_UNIX socketpair to be allowed for user command; status={:?}; stdout={}; stderr={}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[tokio::test]
+async fn managed_proxy_mode_denies_non_af_unix_socketpair_for_user_command() {
+    if let Some(skip_reason) = managed_proxy_skip_reason().await {
+        eprintln!("skipping managed proxy test: {skip_reason}");
+        return;
+    }
+
+    let python_available = Command::new("bash")
+        .arg("-c")
+        .arg("command -v python3 >/dev/null")
+        .status()
+        .await
+        .expect("python3 probe should execute")
+        .success();
+    if !python_available {
+        eprintln!("skipping managed proxy non-AF_UNIX socketpair test: python3 is unavailable");
+        return;
+    }
+
+    let mut env = create_env_from_core_vars();
+    strip_proxy_env(&mut env);
+    env.insert("HTTP_PROXY".to_string(), "http://127.0.0.1:9".to_string());
+
+    let output = run_linux_sandbox_direct(
+        &[
+            "python3",
+            "-c",
+            "import ctypes,errno,socket,sys\nfds = (ctypes.c_int * 2)()\nres = ctypes.CDLL(None, use_errno=True).socketpair(socket.AF_INET, socket.SOCK_STREAM, 0, fds)\nif res == -1 and ctypes.get_errno() == errno.EPERM:\n    sys.exit(0)\nsys.exit(1)\n",
+        ],
+        &PermissionProfile::Disabled,
+        /*allow_network_for_proxy*/ true,
+        env,
+        NETWORK_TIMEOUT_MS,
+    )
+    .await;
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "expected non-AF_UNIX socketpair to be denied for user command; status={:?}; stdout={}; stderr={}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
