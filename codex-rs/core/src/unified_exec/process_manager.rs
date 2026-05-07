@@ -2,7 +2,9 @@ use rand::Rng;
 use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::process::Command;
 use std::sync::Arc;
+use std::sync::LazyLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use tokio::sync::Notify;
@@ -57,21 +59,28 @@ use codex_protocol::protocol::ExecCommandSource;
 use codex_utils_absolute_path::AbsolutePathBuf;
 use codex_utils_output_truncation::approx_token_count;
 
-const UNIFIED_EXEC_ENV: [(&str, &str); 10] = [
+const UNIFIED_EXEC_ENV: [(&str, &str); 7] = [
     ("NO_COLOR", "1"),
     ("TERM", "dumb"),
-    ("LANG", "C.UTF-8"),
-    ("LC_CTYPE", "C.UTF-8"),
-    ("LC_ALL", "C.UTF-8"),
     ("COLORTERM", ""),
     ("PAGER", "cat"),
     ("GIT_PAGER", "cat"),
     ("GH_PAGER", "cat"),
     ("CODEX_CI", "1"),
 ];
+const UNIFIED_EXEC_LOCALE_KEYS: [&str; 3] = ["LANG", "LC_CTYPE", "LC_ALL"];
+const DEFAULT_UNIFIED_EXEC_LOCALE: &str = "C.UTF-8";
+const UNIFIED_EXEC_LOCALE_CANDIDATES: [&str; 4] = [
+    DEFAULT_UNIFIED_EXEC_LOCALE,
+    "C.utf8",
+    "en_US.UTF-8",
+    "en_US.utf8",
+];
 const NETWORK_ACCESS_DENIED_MESSAGE: &str =
     "Network access was denied by the Codex sandbox network proxy.";
 const LATE_NETWORK_DENIAL_GRACE_PERIOD: Duration = Duration::from_millis(100);
+
+static UNIFIED_EXEC_LOCALE: LazyLock<String> = LazyLock::new(detect_unified_exec_locale);
 
 /// Test-only override for deterministic unified exec process IDs.
 ///
@@ -91,11 +100,56 @@ fn should_use_deterministic_process_ids() -> bool {
     cfg!(test) || deterministic_process_ids_forced_for_tests()
 }
 
-fn apply_unified_exec_env(mut env: HashMap<String, String>) -> HashMap<String, String> {
+fn apply_unified_exec_env(env: HashMap<String, String>) -> HashMap<String, String> {
+    apply_unified_exec_env_with_locale(env, UNIFIED_EXEC_LOCALE.as_str())
+}
+
+fn apply_unified_exec_env_with_locale(
+    mut env: HashMap<String, String>,
+    locale: &str,
+) -> HashMap<String, String> {
     for (key, value) in UNIFIED_EXEC_ENV {
         env.insert(key.to_string(), value.to_string());
     }
+    for key in UNIFIED_EXEC_LOCALE_KEYS {
+        env.insert(key.to_string(), locale.to_string());
+    }
     env
+}
+
+fn detect_unified_exec_locale() -> String {
+    preferred_utf8_locale(locale_supports_utf8)
+}
+
+fn locale_supports_utf8(locale: &str) -> Option<bool> {
+    let output = Command::new("locale")
+        .arg("charmap")
+        .env("LC_ALL", locale)
+        .env("LANG", locale)
+        .output();
+    let Ok(output) = output else {
+        return None;
+    };
+    if !output.status.success() {
+        return Some(false);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Some(charmap_is_utf8(stdout.trim()))
+}
+
+fn charmap_is_utf8(charmap: &str) -> bool {
+    charmap.eq_ignore_ascii_case("UTF-8") || charmap.eq_ignore_ascii_case("UTF8")
+}
+
+fn preferred_utf8_locale(mut supports_utf8: impl FnMut(&str) -> Option<bool>) -> String {
+    for locale in UNIFIED_EXEC_LOCALE_CANDIDATES {
+        match supports_utf8(locale) {
+            Some(true) => return locale.to_string(),
+            Some(false) => {}
+            None => return DEFAULT_UNIFIED_EXEC_LOCALE.to_string(),
+        }
+    }
+    "C".to_string()
 }
 
 fn exec_env_policy_from_shell_policy(

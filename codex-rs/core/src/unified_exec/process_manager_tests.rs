@@ -5,7 +5,7 @@ use tokio::time::Instant;
 
 #[test]
 fn unified_exec_env_injects_defaults() {
-    let env = apply_unified_exec_env(HashMap::new());
+    let env = apply_unified_exec_env_with_locale(HashMap::new(), "C.UTF-8");
     let expected = HashMap::from([
         ("NO_COLOR".to_string(), "1".to_string()),
         ("TERM".to_string(), "dumb".to_string()),
@@ -27,11 +27,54 @@ fn unified_exec_env_overrides_existing_values() {
     let mut base = HashMap::new();
     base.insert("NO_COLOR".to_string(), "0".to_string());
     base.insert("PATH".to_string(), "/usr/bin".to_string());
+    base.insert("LC_ALL".to_string(), "C".to_string());
 
-    let env = apply_unified_exec_env(base);
+    let env = apply_unified_exec_env_with_locale(base, "en_US.UTF-8");
 
     assert_eq!(env.get("NO_COLOR"), Some(&"1".to_string()));
     assert_eq!(env.get("PATH"), Some(&"/usr/bin".to_string()));
+    assert_eq!(env.get("LC_ALL"), Some(&"en_US.UTF-8".to_string()));
+}
+
+#[test]
+fn preferred_utf8_locale_uses_first_supported_candidate() {
+    assert_eq!(
+        preferred_utf8_locale(|locale| Some(locale == "C.utf8")),
+        "C.utf8".to_string()
+    );
+}
+
+#[test]
+fn preferred_utf8_locale_prefers_c_utf8_when_supported() {
+    assert_eq!(
+        preferred_utf8_locale(|locale| Some(matches!(locale, "C.UTF-8" | "en_US.UTF-8"))),
+        "C.UTF-8".to_string()
+    );
+}
+
+#[test]
+fn preferred_utf8_locale_can_use_locale_missing_from_locale_a() {
+    assert_eq!(
+        preferred_utf8_locale(|locale| Some(locale == "C.UTF-8")),
+        "C.UTF-8".to_string()
+    );
+}
+
+#[test]
+fn preferred_utf8_locale_uses_c_when_all_candidates_are_unsupported() {
+    assert_eq!(preferred_utf8_locale(|_| Some(false)), "C".to_string());
+}
+
+#[test]
+fn preferred_utf8_locale_keeps_default_when_probe_is_unavailable() {
+    assert_eq!(preferred_utf8_locale(|_| None), "C.UTF-8".to_string());
+}
+
+#[test]
+fn locale_charmap_accepts_utf8_spellings() {
+    assert!(charmap_is_utf8("UTF-8"));
+    assert!(charmap_is_utf8("utf8"));
+    assert!(!charmap_is_utf8("ANSI_X3.4-1968"));
 }
 
 #[test]
